@@ -1,11 +1,10 @@
 { pkgs, ... }:
 
 {
-  # Optional development tools. This profile is intentionally not imported
-  # by the default desktop image; it can be enabled in a developer edition.
+  # Optional development profile. This is not imported into the
+  # default desktop or Live image.
   virtualisation.docker.enable = true;
 
-  programs.nix-ld.enable = true;
   programs.direnv = {
     enable = true;
     nix-direnv.enable = true;
@@ -18,5 +17,6 @@
     gnumake
     curl
     mise
+    supabase-cli
   ];
 }
