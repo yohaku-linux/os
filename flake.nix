@@ -12,10 +12,10 @@
         inherit system;
 
         modules = [
-          ./nixos/modules/core.nix
+          ./nixos/modules/base.nix
           ./nixos/modules/japanese.nix
-          ./nixos/modules/desktop.nix
-          ./nixos/modules/packages.nix
+          ./nixos/modules/desktop/niri.nix
+          ./nixos/modules/desktop/packages.nix
           ./nixos/iso/live.nix
         ];
       };
