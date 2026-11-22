@@ -40,16 +40,51 @@ for a build.
 
 ## Test in QEMU
 
+The following command was used for the current Live ISO smoke test:
+
 ```sh
-ISO="$(find -L result/iso -name '*.iso' -print -quit)"
+ISO="$(find -L result/iso -maxdepth 1 -name '*.iso' -print -quit)"
 
 nix shell nixpkgs#qemu --command \
   qemu-system-x86_64 \
   -m 4096 \
   -smp 4 \
+  -device qemu-xhci,id=xhci \
+  -device usb-tablet,bus=xhci.0 \
+  -device virtio-vga-gl \
+  -display gtk,gl=on \
+  -nic user,model=virtio-net-pci \
   -cdrom "$ISO" \
   -boot d
 ```
+
+The USB tablet provides pointer input in the virtual machine. The
+user-mode network device provides QEMU's NAT-based network connection.
+
+## Live ISO smoke test
+
+The development Live ISO has been manually tested in QEMU.
+
+Confirmed:
+
+- The Live environment boots into the Niri session.
+- Keyboard and mouse input work.
+- Fcitx5 with Mozc is available and Japanese input/conversion works.
+- Fuzzel can launch Foot.
+- Notifications appear and Waybar is displayed.
+- Network connectivity works from the guest: ping to `1.1.1.1` succeeds
+  and DNS resolution for `github.com` succeeds.
+
+Known observation:
+
+- Waybar displays the network as disconnected in the QEMU environment
+  even though the guest can reach the network and resolve hostnames.
+  This has not yet been verified on physical hardware, so it is not
+  currently treated as a confirmed network configuration defect.
+
+Physical hardware compatibility and installation to a machine have not
+yet been tested. In particular, Wi-Fi, audio, Bluetooth, and
+hardware-specific graphics behavior still need separate validation.
 
 ## Repository layout
 
