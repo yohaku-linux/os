@@ -24,8 +24,13 @@ On a NixOS or Linux system with Nix flakes enabled:
 ```sh
 nix flake lock
 nix flake check --no-build
-nix build .#iso -L
+nix build --cores 2 --max-jobs 1 .#iso -L
 ```
+
+The build uses two cores for each derivation to avoid letting the ISO
+SquashFS compression saturate the machine. The development Live image
+uses Zstandard compression level 3 for faster builds; the ISO may be
+larger than one built with the NixOS default compression level.
 
 The ISO is produced under `result/iso/`.
 
