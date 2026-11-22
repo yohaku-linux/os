@@ -1,31 +1,16 @@
-{ pkgs, nxc, ... }:
+{ pkgs, ... }:
 
-let
-  system = pkgs.stdenv.hostPlatform.system;
-in
 {
-  environment.systemPackages = (with pkgs; [
-    # Core desktop tools for the Niri session.
+  environment.systemPackages = with pkgs; [
     foot
     fuzzel
     waybar
     mako
-    thunar
-
-    # Common desktop utilities.
-    firefox
-    pavucontrol
-    networkmanagerapplet
-    blueman
-    brightnessctl
-    playerctl
+    wl-mirror
+    bibata-cursors
     grim
     slurp
     wl-clipboard
-    xdg-utils
-  ]) ++ [
-    # NXC CLI and its graphical application manager.
-    nxc.packages.${system}.default
-    nxc.packages.${system}.nxc-app
+    gpu-screen-recorder
   ];
 }
