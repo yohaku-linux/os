@@ -2,48 +2,52 @@
 
 ## Current development target
 
-Yohaku Linux is built as a NixOS-based desktop distribution. The first
-milestone is a bootable x86_64 Live ISO, not a finished installer.
+Yohaku Linux starts as a NixOS configuration project. The first goal is
+to organize and validate a reusable desktop configuration before adding
+distribution-specific applications, branding, or behavior.
 
-The initial desktop profile is based on Niri and includes Japanese input,
-common desktop utilities, audio, Bluetooth, and NXC.
+The initial configuration reuses settings from the maintainer's existing
+NixOS setup:
+
+- Niri, Ly, Xwayland, and XDG portals
+- Japanese locale, Fcitx5/Mozc, and Japanese fonts
+- Foot, Fuzzel, Waybar, Mako, and selected Wayland utilities
+- NetworkManager, Asia/Tokyo timezone, Nix Flakes, and nix-ld
 
 ## Repository boundaries
 
-- `yohaku-linux/os`: distribution Flake, NixOS modules, ISO and release
-  configuration.
-- `nxc-project/nixos-json-controller`: independently maintained NXC CLI
-  and NXC LOUNGE. Yohaku consumes its Flake packages.
-- `niri-spatial/depth-workspaces`: independently maintained Niri extension.
-  It is not shipped by the initial image while its package and user-facing
-  behavior are still under development.
+- `yohaku-linux/os`: shared NixOS configuration, optional profiles, and
+  development Live image.
+- `nxc-project/nixos-json-controller`: independently maintained NXC
+  project. It is not integrated into the initial system configuration.
+- `niri-spatial/depth-workspaces`: independently maintained Niri
+  extension. It is not integrated while it remains under development.
 
-## Reuse from the maintainer's personal configuration
+## Personal configuration exclusions
 
-The distribution reuses general desktop choices from the personal NixOS
-configuration: Niri, Ly, Xwayland, Wayland portals, Fcitx5/Mozc, Japanese
-locale and fonts, Foot, Fuzzel, Waybar, and Mako.
+The distribution configuration does not copy:
 
-Machine-specific hardware configuration, filesystem UUIDs, personal user
-accounts, hostname, and personal application choices are deliberately not
-copied into the distribution.
+- machine-specific hardware configuration or filesystem UUIDs
+- the maintainer's personal user account and host name
+- personal application selections such as Chrome, VS Code, Obsidian,
+  and Vesktop into the default image
+- Docker and development tools into the default desktop profile
 
-Developer tools and Docker are kept in the optional
-`nixos/profiles/developer.nix` profile rather than the default desktop.
+Development tools are kept in the optional
+`nixos/profiles/developer.nix` module.
 
-## Stability policy
+## Current scope
 
-The Flake currently tracks `nixos-unstable` to match the upstream NXC input
-and support active integration work. This is a development choice, not a
-promise of stable releases. A release branch and update policy should be
-selected before publishing an installation image for general users.
+There are no Yohaku-specific desktop patches, custom Niri keybindings,
+custom package manager, or branded system identity in this initial stage.
+The objective is to keep the configuration close to upstream NixOS and
+make it easy to understand and test.
 
 ## Next milestones
 
-1. Evaluate the Flake and build the Live ISO.
-2. Test boot, input, networking, audio, Bluetooth, and NXC in a VM and on
-   more than one physical device.
-3. Add a reproducible installer and first-boot user setup.
-4. Define system update, rollback, release signing, and support policies.
-5. Package and integrate depth-workspaces after its behavior and interface
-   are stable enough for end users.
+1. Evaluate the Flake and build the development Live image.
+2. Confirm the desktop, Japanese input, network, and common utilities work.
+3. Decide which settings should be common defaults and which should remain
+   optional.
+4. Only after the base is stable, consider installation, distribution
+   branding, update policy, and independent components.
