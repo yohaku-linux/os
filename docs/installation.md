@@ -34,8 +34,10 @@ for testing on a spare disk or a virtual machine.
 - The entire selected disk is erased and repartitioned.
 
 The installer does not yet support preserving existing partitions, dual-boot
-installation, disk encryption, Btrfs, custom partition layouts, or swap
-configuration. It should not be used on a disk containing data you need.
+installation, disk encryption, Btrfs, custom partition layouts, swap
+configuration, or Secure Boot. Secure Boot should be disabled in firmware
+before attempting installation. It should not be used on a disk containing
+data you need.
 
 ## User account and password
 
