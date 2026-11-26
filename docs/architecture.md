@@ -47,16 +47,23 @@ custom package manager, or branded system identity in this initial stage.
 The objective is to keep the configuration close to upstream NixOS and
 make it easy to understand and test.
 
-The first installer deliberately has a narrow scope: whole-disk
-installation using GPT and ext4, with either UEFI or legacy BIOS boot.
-It creates one normal user account and sets the password interactively
-inside the installed system. It does not yet preserve existing
-partitions, configure encryption, or support dual-boot layouts.
+The first installer deliberately follows the maintainer's existing
+machine layout: UEFI, GPT, a 1 GiB FAT32 EFI System Partition, an ext4
+root partition using the remaining disk space, systemd-boot, and no swap
+partition. It discovers internal non-removable disks automatically:
+a single candidate is selected automatically, while multiple candidates
+are shown for selection. USB-connected and removable disks are excluded.
+
+The installer erases the entire selected disk after an explicit
+confirmation. It creates one normal user account and sets the password
+interactively inside the installed system. It does not yet preserve
+existing partitions, configure encryption, or support dual-boot layouts.
 
 ## Next milestones
 
 1. Rebuild and evaluate the Live image with the installer included.
-2. Test the installer in QEMU using a separate virtual disk.
+2. Test automatic disk discovery and installation in QEMU using a
+   separate virtual disk and UEFI firmware.
 3. Verify first boot, Ly login, Niri, Japanese input, networking, and
    password-authenticated sudo on the installed system.
 4. Test hardware compatibility on physical hardware.
