@@ -107,7 +107,8 @@ fi
 
 nixos-generate-config --root /mnt
 mkdir -p /mnt/etc/nixos/yohaku-modules
-cp --archive --dereference /etc/yohaku/modules/. /mnt/etc/nixos/yohaku-modules/
+cp --recursive --dereference /etc/yohaku/modules/. /mnt/etc/nixos/yohaku-modules/
+chmod -R u+rwX /mnt/etc/nixos/yohaku-modules
 
 if [[ "$boot_mode" == 'uefi' ]]; then
   bootloader_config='  boot.loader.systemd-boot.enable = true;
