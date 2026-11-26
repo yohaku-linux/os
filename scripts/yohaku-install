@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+fail() {
+  printf 'Error: %s\n' "$*" >&2
+  exit 1
+}
+
+if [[ ${EUID} -ne 0 ]]; then
+  command -v sudo >/dev/null 2>&1 || fail 'sudo is required to run the installer.'
+  exec sudo -- "$0" "$@"
+fi
+
+[[ -d /sys/firmware/efi ]] || fail 'The initial installer supports UEFI boot only. Restart the Live ISO in UEFI mode.'
+[[ -d /etc/yohaku/modules ]] || fail 'Yohaku configuration modules are missing from this Live ISO.'
+command -v nixos-install >/dev/null 2>&1 || fail 'nixos-install is not available in this environment.'
+command -v nixos-generate-config >/dev/null 2>&1 || fail 'nixos-generate-config is not available in this environment.'
+command -v nixos-enter >/dev/null 2>&1 || fail 'nixos-enter is not available in this environment.'
+
+if mountpoint -q /mnt; then
+  fail '/mnt is already mounted. Unmount the previous installation target before starting again.'
+fi
+if find /mnt -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .; then
+  fail '/mnt is not empty. Inspect it and clear it before starting the installer.'
+fi
+
+cat <<'INTRO'
+
+Yohaku Linux installer (experimental)
+
+This installer currently supports:
+  - x86_64 UEFI systems
+  - GPT partition table
+  - 1 GiB EFI System Partition
+  - ext4 root filesystem
+
+WARNING: The selected disk will be erased completely.
+This is an early installer intended for testing, not yet a polished release installer.
+
+Available disks:
+INTRO
+
+lsblk --nodeps --output NAME,PATH,SIZE,MODEL,TYPE
+printf '\nEnter the full disk path (example: /dev/nvme0n1): '
+read -r disk
+[[ -b "$disk" ]] || fail "Not a block device: $disk"
+
+disk_type="$(lsblk --nodeps --noheadings --output TYPE "$disk" | xargs)"
+[[ "$disk_type" == 'disk' ]] || fail 'Select a whole disk, not a partition.'
+
+disk_size="$(blockdev --getsize64 "$disk")"
+minimum_size=$((20 * 1024 * 1024 * 1024))
+(( disk_size >= minimum_size )) || fail 'The selected disk must be at least 20 GiB.'
+
+if lsblk --noheadings --raw --output MOUNTPOINTS "$disk" | grep -q '[^[:space:]]'; then
+  fail 'The selected disk has mounted filesystems. Unmount them before installing.'
+fi
+
+printf '\nSelected disk:\n'
+lsblk --output NAME,PATH,SIZE,MODEL,TYPE,MOUNTPOINTS "$disk"
+printf '\nThis operation permanently erases all data on %s.\n' "$disk"
+printf 'To continue, type exactly: ERASE %s\n> ' "$disk"
+read -r confirmation
+[[ "$confirmation" == "ERASE $disk" ]] || fail 'Confirmation did not match. Nothing was changed.'
+
+printf '\nEnter the new account name (lowercase letters, numbers, _ and -): '
+read -r username
+[[ "$username" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail 'Invalid username.'
+
+printf '\nThe installer will now partition and format %s.\n' "$disk"
+parted --script "$disk" mklabel gpt
+parted --script "$disk" mkpart primary fat32 1MiB 1025MiB
+parted --script "$disk" set 1 esp on
+parted --script "$disk" name 1 YOHaku-EFI
+parted --script "$disk" mkpart primary ext4 1025MiB 100%
+parted --script "$disk" name 2 YOHaku-root
+partprobe "$disk"
+udevadm settle
+
+esp_part="$(lsblk --noheadings --raw --paths --output NAME,PARTN "$disk" | awk '$2 == 1 { print $1; exit }')"
+root_part="$(lsblk --noheadings --raw --paths --output NAME,PARTN "$disk" | awk '$2 == 2 { print $1; exit }')"
+[[ -b "$esp_part" ]] || fail 'Could not find the EFI partition after partitioning.'
+[[ -b "$root_part" ]] || fail 'Could not find the root partition after partitioning.'
+
+mkfs.fat -F 32 -n YOHakuEFI "$esp_part"
+mkfs.ext4 -F -L yohaku "$root_part"
+
+mkdir -p /mnt
+mount "$root_part" /mnt
+mkdir -p /mnt/boot
+mount "$esp_part" /mnt/boot
+
+nixos-generate-config --root /mnt
+mkdir -p /mnt/etc/nixos/yohaku-modules
+cp --archive --dereference /etc/yohaku/modules/. /mnt/etc/nixos/yohaku-modules/
+
+cat > /mnt/etc/nixos/configuration.nix <<NIX
+{ ... }:
+{
+  imports = [
+    ./hardware-configuration.nix
+    ./yohaku-modules/base.nix
+    ./yohaku-modules/japanese.nix
+    ./yohaku-modules/desktop/niri.nix
+    ./yohaku-modules/desktop/packages.nix
+  ];
+
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
+  services.displayManager.defaultSession = "niri";
+
+  users.mutableUsers = true;
+  users.users.${username} = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" "networkmanager" ];
+  };
+  security.sudo.wheelNeedsPassword = true;
+}
+NIX
+
+printf '\nInstalling Yohaku Linux. This requires network access and may take some time.\n'
+nixos-install --root /mnt --no-root-passwd
+
+printf '\nSet the password for %s. The password is written to the installed system, not to the Nix configuration.\n' "$username"
+nixos-enter --root /mnt -c "passwd $username"
+
+printf '\nInstallation completed.\n'
+printf 'The installed system will use the account %s.\n' "$username"
+printf 'Remove the installation media before rebooting.\n'
+read -r -p 'Unmount the target and reboot now? [y/N] ' reboot_answer
+if [[ "$reboot_answer" =~ ^[Yy]$ ]]; then
+  umount -R /mnt
+  reboot
+else
+  printf 'The target remains mounted at /mnt. Run: umount -R /mnt\n'
+fi
