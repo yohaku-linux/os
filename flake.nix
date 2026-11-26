@@ -17,6 +17,7 @@
           ./nixos/modules/desktop/niri.nix
           ./nixos/modules/desktop/packages.nix
           ./nixos/iso/live.nix
+          ./nixos/iso/installer.nix
         ];
       };
 
