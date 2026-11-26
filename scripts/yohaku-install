@@ -11,7 +11,12 @@ if [[ ${EUID} -ne 0 ]]; then
   exec sudo -- "$0" "$@"
 fi
 
-[[ -d /sys/firmware/efi ]] || fail 'The initial installer supports UEFI boot only. Restart the Live ISO in UEFI mode.'
+if [[ -d /sys/firmware/efi ]]; then
+  boot_mode='uefi'
+else
+  boot_mode='bios'
+fi
+
 [[ -d /etc/yohaku/modules ]] || fail 'Yohaku configuration modules are missing from this Live ISO.'
 command -v nixos-install >/dev/null 2>&1 || fail 'nixos-install is not available in this environment.'
 command -v nixos-generate-config >/dev/null 2>&1 || fail 'nixos-generate-config is not available in this environment.'
@@ -29,9 +34,9 @@ cat <<'INTRO'
 Yohaku Linux installer (experimental)
 
 This installer currently supports:
-  - x86_64 UEFI systems
+  - x86_64 systems booted in UEFI or legacy BIOS mode
   - GPT partition table
-  - 1 GiB EFI System Partition
+  - 1 GiB EFI System Partition for UEFI, or BIOS boot partition for legacy BIOS
   - ext4 root filesystem
 
 WARNING: The selected disk will be erased completely.
@@ -67,32 +72,49 @@ printf '\nEnter the new account name (lowercase letters, numbers, _ and -): '
 read -r username
 [[ "$username" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail 'Invalid username.'
 
-printf '\nThe installer will now partition and format %s.\n' "$disk"
+printf '\nBoot mode: %s\n' "$boot_mode"
+printf 'The installer will now partition and format %s.\n' "$disk"
 parted --script "$disk" mklabel gpt
-parted --script "$disk" mkpart primary fat32 1MiB 1025MiB
-parted --script "$disk" set 1 esp on
-parted --script "$disk" name 1 YOHaku-EFI
-parted --script "$disk" mkpart primary ext4 1025MiB 100%
-parted --script "$disk" name 2 YOHaku-root
+if [[ "$boot_mode" == 'uefi' ]]; then
+  parted --script "$disk" mkpart primary fat32 1MiB 1025MiB
+  parted --script "$disk" set 1 esp on
+  parted --script "$disk" name 1 YOHaku-EFI
+  parted --script "$disk" mkpart primary ext4 1025MiB 100%
+  parted --script "$disk" name 2 YOHaku-root
+else
+  parted --script "$disk" mkpart primary 1MiB 3MiB
+  parted --script "$disk" set 1 bios_grub on
+  parted --script "$disk" name 1 YOHaku-BIOS
+  parted --script "$disk" mkpart primary ext4 3MiB 100%
+  parted --script "$disk" name 2 YOHaku-root
+fi
 partprobe "$disk"
 udevadm settle
 
-esp_part="$(lsblk --noheadings --raw --paths --output NAME,PARTN "$disk" | awk '$2 == 1 { print $1; exit }')"
 root_part="$(lsblk --noheadings --raw --paths --output NAME,PARTN "$disk" | awk '$2 == 2 { print $1; exit }')"
-[[ -b "$esp_part" ]] || fail 'Could not find the EFI partition after partitioning.'
 [[ -b "$root_part" ]] || fail 'Could not find the root partition after partitioning.'
-
-mkfs.fat -F 32 -n YOHakuEFI "$esp_part"
 mkfs.ext4 -F -L yohaku "$root_part"
 
 mkdir -p /mnt
 mount "$root_part" /mnt
-mkdir -p /mnt/boot
-mount "$esp_part" /mnt/boot
+if [[ "$boot_mode" == 'uefi' ]]; then
+  esp_part="$(lsblk --noheadings --raw --paths --output NAME,PARTN "$disk" | awk '$2 == 1 { print $1; exit }')"
+  [[ -b "$esp_part" ]] || fail 'Could not find the EFI partition after partitioning.'
+  mkfs.fat -F 32 -n YOHakuEFI "$esp_part"
+  mkdir -p /mnt/boot
+  mount "$esp_part" /mnt/boot
+fi
 
 nixos-generate-config --root /mnt
 mkdir -p /mnt/etc/nixos/yohaku-modules
 cp --archive --dereference /etc/yohaku/modules/. /mnt/etc/nixos/yohaku-modules/
+
+if [[ "$boot_mode" == 'uefi' ]]; then
+  bootloader_config='  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;'
+else
+  bootloader_config="  boot.loader.grub.enable = true;\n  boot.loader.grub.device = \"$(readlink -f "$disk")\";"
+fi
 
 cat > /mnt/etc/nixos/configuration.nix <<NIX
 { ... }:
@@ -105,8 +127,7 @@ cat > /mnt/etc/nixos/configuration.nix <<NIX
     ./yohaku-modules/desktop/packages.nix
   ];
 
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+  $bootloader_config
   services.displayManager.defaultSession = "niri";
 
   users.mutableUsers = true;
