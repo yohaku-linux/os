@@ -11,12 +11,7 @@ if [[ ${EUID} -ne 0 ]]; then
   exec sudo -- "$0" "$@"
 fi
 
-if [[ -d /sys/firmware/efi ]]; then
-  boot_mode='uefi'
-else
-  boot_mode='bios'
-fi
-
+[[ -d /sys/firmware/efi ]] || fail 'Yohaku Linux currently supports UEFI installation only. Restart the Live ISO in UEFI mode.'
 [[ -d /etc/yohaku/modules ]] || fail 'Yohaku configuration modules are missing from this Live ISO.'
 command -v nixos-install >/dev/null 2>&1 || fail 'nixos-install is not available in this environment.'
 command -v nixos-generate-config >/dev/null 2>&1 || fail 'nixos-generate-config is not available in this environment.'
@@ -29,29 +24,57 @@ if find /mnt -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .; then
   fail '/mnt is not empty. Inspect it and clear it before starting the installer.'
 fi
 
+mapfile -t candidate_disks < <(
+  lsblk --json --nodeps --paths --output NAME,TYPE,RM,TRAN |
+    jq -r '
+      .blockdevices[]
+      | select(
+          .type == "disk"
+          and (.rm == false or .rm == 0 or .rm == "0")
+          and ((.tran // "") | ascii_downcase) != "usb"
+        )
+      | .name
+    '
+)
+
+(( ${#candidate_disks[@]} > 0 )) || fail 'No internal non-removable disks were found. Check the device list with lsblk.'
+
 cat <<'INTRO'
 
 Yohaku Linux installer (experimental)
 
-This installer currently supports:
-  - x86_64 systems booted in UEFI or legacy BIOS mode
-  - GPT partition table
-  - 1 GiB EFI System Partition for UEFI, or BIOS boot partition for legacy BIOS
-  - ext4 root filesystem
+The installer uses the standard Yohaku layout:
+  - UEFI boot with GPT
+  - 1 GiB EFI System Partition (FAT32)
+  - Remaining space as the ext4 root filesystem
+  - systemd-boot
+  - No swap partition
 
-WARNING: The selected disk will be erased completely.
-This is an early installer intended for testing, not yet a polished release installer.
+Removable disks and USB-connected disks are excluded from the target list.
+The selected disk will be erased completely.
 
-Available disks:
 INTRO
 
-lsblk --nodeps --output NAME,PATH,SIZE,MODEL,TYPE
-printf '\nEnter the full disk path (example: /dev/nvme0n1): '
-read -r disk
-[[ -b "$disk" ]] || fail "Not a block device: $disk"
+if (( ${#candidate_disks[@]} == 1 )); then
+  disk="${candidate_disks[0]}"
+  printf 'One internal disk was found and selected automatically:\n'
+  lsblk --nodeps --output NAME,PATH,SIZE,MODEL "$disk"
+else
+  printf 'Select the disk to install Yohaku Linux on:\n\n'
+  for i in "${!candidate_disks[@]}"; do
+    printf '  %d) ' "$((i + 1))"
+    lsblk --nodeps --noheadings --output PATH,SIZE,MODEL "${candidate_disks[$i]}"
+  done
+
+  printf '\nDisk number: '
+  read -r disk_selection
+  [[ "$disk_selection" =~ ^[1-9][0-9]*$ ]] || fail 'Enter one of the listed disk numbers.'
+  (( disk_selection <= ${#candidate_disks[@]} )) || fail 'The selected disk number is out of range.'
+  disk="${candidate_disks[$((disk_selection - 1))]}"
+fi
 
 disk_type="$(lsblk --nodeps --noheadings --output TYPE "$disk" | xargs)"
-[[ "$disk_type" == 'disk' ]] || fail 'Select a whole disk, not a partition.'
+[[ "$disk_type" == 'disk' ]] || fail 'The selected device is not a whole disk.'
 
 disk_size="$(blockdev --getsize64 "$disk")"
 minimum_size=$((20 * 1024 * 1024 * 1024))
@@ -69,10 +92,9 @@ while IFS= read -r candidate; do
   fi
 done < <(lsblk --noheadings --raw --paths --output NAME "$disk")
 
-printf '\nSelected disk:\n'
+printf '\nSelected disk (all partitions and data on this disk will be erased):\n'
 lsblk --output NAME,PATH,SIZE,MODEL,TYPE,MOUNTPOINTS "$disk"
-printf '\nThis operation permanently erases all data on %s.\n' "$disk"
-printf 'To continue, type exactly: ERASE %s\n> ' "$disk"
+printf '\nTo continue, type exactly: ERASE %s\n> ' "$disk"
 read -r confirmation
 [[ "$confirmation" == "ERASE $disk" ]] || fail 'Confirmation did not match. Nothing was changed.'
 
@@ -80,50 +102,33 @@ printf '\nEnter the new account name (lowercase letters, numbers, _ and -): '
 read -r username
 [[ "$username" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail 'Invalid username.'
 
-printf '\nBoot mode: %s\n' "$boot_mode"
-printf 'The installer will now partition and format %s.\n' "$disk"
+printf '\nCreating the standard Yohaku partition layout on %s.\n' "$disk"
 parted --script "$disk" mklabel gpt
-if [[ "$boot_mode" == 'uefi' ]]; then
-  parted --script "$disk" mkpart primary fat32 1MiB 1025MiB
-  parted --script "$disk" set 1 esp on
-  parted --script "$disk" name 1 YOHaku-EFI
-  parted --script "$disk" mkpart primary ext4 1025MiB 100%
-  parted --script "$disk" name 2 YOHaku-root
-else
-  parted --script "$disk" mkpart primary 1MiB 3MiB
-  parted --script "$disk" set 1 bios_grub on
-  parted --script "$disk" name 1 YOHaku-BIOS
-  parted --script "$disk" mkpart primary ext4 3MiB 100%
-  parted --script "$disk" name 2 YOHaku-root
-fi
+parted --script "$disk" mkpart primary fat32 1MiB 1025MiB
+parted --script "$disk" set 1 esp on
+parted --script "$disk" name 1 YOHaku-EFI
+parted --script "$disk" mkpart primary ext4 1025MiB 100%
+parted --script "$disk" name 2 YOHaku-root
 partprobe "$disk"
 udevadm settle
 
+esp_part="$(lsblk --noheadings --raw --paths --output NAME,PARTN "$disk" | awk '$2 == 1 { print $1; exit }')"
 root_part="$(lsblk --noheadings --raw --paths --output NAME,PARTN "$disk" | awk '$2 == 2 { print $1; exit }')"
+[[ -b "$esp_part" ]] || fail 'Could not find the EFI partition after partitioning.'
 [[ -b "$root_part" ]] || fail 'Could not find the root partition after partitioning.'
+
+mkfs.fat -F 32 -n YOHakuEFI "$esp_part"
 mkfs.ext4 -F -L yohaku "$root_part"
 
 mkdir -p /mnt
 mount "$root_part" /mnt
-if [[ "$boot_mode" == 'uefi' ]]; then
-  esp_part="$(lsblk --noheadings --raw --paths --output NAME,PARTN "$disk" | awk '$2 == 1 { print $1; exit }')"
-  [[ -b "$esp_part" ]] || fail 'Could not find the EFI partition after partitioning.'
-  mkfs.fat -F 32 -n YOHakuEFI "$esp_part"
-  mkdir -p /mnt/boot
-  mount "$esp_part" /mnt/boot
-fi
+mkdir -p /mnt/boot
+mount "$esp_part" /mnt/boot
 
 nixos-generate-config --root /mnt
 mkdir -p /mnt/etc/nixos/yohaku-modules
 cp --recursive --dereference /etc/yohaku/modules/. /mnt/etc/nixos/yohaku-modules/
 chmod -R u+rwX /mnt/etc/nixos/yohaku-modules
-
-if [[ "$boot_mode" == 'uefi' ]]; then
-  bootloader_config='  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;'
-else
-  bootloader_config="$(printf '  boot.loader.grub.enable = true;\n  boot.loader.grub.device = "%s";' "$(readlink -f "$disk")")"
-fi
 
 cat > /mnt/etc/nixos/configuration.nix <<NIX
 { ... }:
@@ -136,7 +141,8 @@ cat > /mnt/etc/nixos/configuration.nix <<NIX
     ./yohaku-modules/desktop/packages.nix
   ];
 
-  $bootloader_config
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
   services.displayManager.defaultSession = "niri";
 
   users.mutableUsers = true;
