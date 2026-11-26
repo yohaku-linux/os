@@ -113,7 +113,7 @@ if [[ "$boot_mode" == 'uefi' ]]; then
   bootloader_config='  boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;'
 else
-  bootloader_config="  boot.loader.grub.enable = true;\n  boot.loader.grub.device = \"$(readlink -f "$disk")\";"
+  bootloader_config="$(printf '  boot.loader.grub.enable = true;\n  boot.loader.grub.device = "%s";' "$(readlink -f "$disk")")"
 fi
 
 cat > /mnt/etc/nixos/configuration.nix <<NIX
