@@ -60,12 +60,58 @@ password-authenticated `sudo`.
 This keeps the installed system configurable with the standard NixOS tools,
 while keeping machine-specific hardware settings out of the public repository.
 
-## Testing before using real hardware
+## Test the installation in QEMU
 
-Test the installer in a virtual machine with a separate virtual disk first.
+Create a separate 40 GiB virtual disk:
+
+```sh
+nix shell nixpkgs#qemu --command qemu-img create -f qcow2 yohaku-test-disk.qcow2 40G
+```
+
+Boot the Live ISO with that virtual disk attached:
+
+```sh
+ISO="$(find -L result/iso -maxdepth 1 -name '*.iso' -print -quit)"
+
+nix shell nixpkgs#qemu --command \
+  qemu-system-x86_64 \
+  -m 4096 \
+  -smp 4 \
+  -device qemu-xhci,id=xhci \
+  -device usb-tablet,bus=xhci.0 \
+  -device virtio-vga-gl \
+  -display gtk,gl=on \
+  -nic user,model=virtio-net-pci \
+  -drive file=yohaku-test-disk.qcow2,if=virtio,format=qcow2 \
+  -cdrom "$ISO" \
+  -boot d
+```
+
+In the Live session, launch **Install Yohaku Linux** and choose the virtual
+disk shown by the installer (usually `/dev/vda`). The installer will erase
+that virtual disk. Complete the install and choose not to reboot from inside
+the VM. Then close QEMU and start the VM again with the same virtual disk,
+but without the ISO:
+
+```sh
+nix shell nixpkgs#qemu --command \
+  qemu-system-x86_64 \
+  -m 4096 \
+  -smp 4 \
+  -device qemu-xhci,id=xhci \
+  -device usb-tablet,bus=xhci.0 \
+  -device virtio-vga-gl \
+  -display gtk,gl=on \
+  -nic user,model=virtio-net-pci \
+  -drive file=yohaku-test-disk.qcow2,if=virtio,format=qcow2 \
+  -boot c
+```
+
+Verify that the installed system boots, Ly accepts the account password,
+Niri starts, Japanese input works, and `sudo` asks for the user's password.
+
 Do not use a physical disk for the first installation test. A failed or
-misconfigured disk selection can erase the selected disk.
-
-The installer has been added to the Live image configuration, but a complete
-install-to-disk and first-boot test is still required before this installer
-should be considered reliable.
+misconfigured disk selection can erase the selected disk. The installer
+has been added to the Live image configuration, but a complete
+install-to-disk and first-boot test is still required before it should be
+considered reliable.
