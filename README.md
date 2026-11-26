@@ -14,8 +14,9 @@ finished distribution or a stable release.
 The current setup reuses Niri, Ly, Xwayland, Japanese locale and input,
 Fcitx5/Mozc, Japanese fonts, and common desktop utilities.
 
-No Yohaku-specific desktop behavior or custom system-management
-application is added at this stage.
+An experimental guided installer is now included in the Live image
+configuration. It is not yet validated by a complete install-to-disk
+and first-boot test.
 
 ## Build the development Live image
 
@@ -40,7 +41,7 @@ for a build.
 
 ## Test in QEMU
 
-The following command was used for the current Live ISO smoke test:
+The following command was used for the initial Live ISO smoke test:
 
 ```sh
 ISO="$(find -L result/iso -maxdepth 1 -name '*.iso' -print -quit)"
@@ -63,7 +64,7 @@ user-mode network device provides QEMU's NAT-based network connection.
 
 ## Live ISO smoke test
 
-The development Live ISO has been manually tested in QEMU.
+The initial development Live ISO has been manually tested in QEMU.
 
 Confirmed:
 
@@ -82,16 +83,28 @@ Known observation:
   This has not yet been verified on physical hardware, so it is not
   currently treated as a confirmed network configuration defect.
 
-Physical hardware compatibility and installation to a machine have not
-yet been tested. In particular, Wi-Fi, audio, Bluetooth, and
-hardware-specific graphics behavior still need separate validation.
+Physical hardware compatibility and installation to a target disk have
+not yet been tested. In particular, Wi-Fi, audio, Bluetooth,
+hardware-specific graphics behavior, and the new installer still need
+separate validation.
+
+## Install to a target disk
+
+The Live image configuration includes an experimental guided installer.
+It currently erases and repartitions the selected disk, so test it only
+in a virtual machine with a separate virtual disk until the full
+installation and first-boot flow has been verified.
+
+See [docs/installation.md](docs/installation.md) for supported layouts,
+account setup, limitations, and test instructions.
 
 ## Repository layout
 
 - `flake.nix` — NixOS configuration and development ISO output.
 - `nixos/modules/` — shared NixOS modules.
-- `nixos/iso/` — development Live image configuration.
+- `nixos/iso/` — development Live image and installer configuration.
 - `nixos/profiles/` — optional configuration profiles.
+- `scripts/` — installation scripts.
 - `docs/` — architecture and development notes.
 
 ## Personal machine settings intentionally excluded
