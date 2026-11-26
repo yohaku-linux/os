@@ -57,9 +57,17 @@ disk_size="$(blockdev --getsize64 "$disk")"
 minimum_size=$((20 * 1024 * 1024 * 1024))
 (( disk_size >= minimum_size )) || fail 'The selected disk must be at least 20 GiB.'
 
-if lsblk --noheadings --raw --output MOUNTPOINTS "$disk" | grep -q '[^[:space:]]'; then
+mounted_paths="$(lsblk --noheadings --raw --output MOUNTPOINTS "$disk")"
+if grep '[^[:space:]]' <<< "$mounted_paths" >/dev/null; then
   fail 'The selected disk has mounted filesystems. Unmount them before installing.'
 fi
+
+swap_devices="$(swapon --show --noheadings --raw --output NAME)"
+while IFS= read -r candidate; do
+  if grep -Fxq "$candidate" <<< "$swap_devices"; then
+    fail "The selected disk contains active swap: $candidate"
+  fi
+done < <(lsblk --noheadings --raw --paths --output NAME "$disk")
 
 printf '\nSelected disk:\n'
 lsblk --output NAME,PATH,SIZE,MODEL,TYPE,MOUNTPOINTS "$disk"
