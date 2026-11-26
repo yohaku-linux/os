@@ -10,6 +10,7 @@ let
       findutils
       gawk
       gnugrep
+      jq
       nixos-install-tools
       parted
       sudo
