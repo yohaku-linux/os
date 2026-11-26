@@ -7,6 +7,7 @@ let
       coreutils
       dosfstools
       e2fsprogs
+      findutils
       gawk
       gnugrep
       nixos-install-tools
@@ -17,21 +18,24 @@ let
     ];
     text = builtins.readFile ../../scripts/yohaku-install;
   };
+
+  installerDesktop = pkgs.makeDesktopItem {
+    name = "yohaku-installer";
+    desktopName = "Install Yohaku Linux";
+    genericName = "System Installer";
+    comment = "Install Yohaku Linux to a disk";
+    exec = "foot -e yohaku-install";
+    icon = "system-software-install";
+    terminal = false;
+    categories = [ "System" "Settings" ];
+  };
 in
 {
-  environment.systemPackages = [ yohakuInstall ];
+  environment.systemPackages = [
+    yohakuInstall
+    installerDesktop
+  ];
 
   # Keep a copy of the shared system modules available to the installer.
   environment.etc."yohaku/modules".source = ../modules;
-
-  environment.etc."xdg/applications/yohaku-installer.desktop".text = ''
-    [Desktop Entry]
-    Type=Application
-    Name=Install Yohaku Linux
-    Comment=Install Yohaku Linux to a disk
-    Exec=foot -e yohaku-install
-    Icon=system-software-install
-    Terminal=false
-    Categories=System;Settings;
-  '';
 }
