@@ -91,8 +91,12 @@ separate validation.
 ## Install to a target disk
 
 The Live image configuration includes an experimental guided installer.
-It currently erases and repartitions the selected disk, so test it only
-in a virtual machine with a separate virtual disk until the full
+It discovers internal non-removable disks, selects a single candidate
+automatically, or asks the user to choose when multiple candidates exist.
+The initial layout follows the maintainer's NixOS setup: UEFI, GPT,
+a 1 GiB FAT32 EFI partition, ext4 root, systemd-boot, and no swap.
+The selected disk is erased completely, so test the installer only in
+a virtual machine with a separate virtual disk until the full
 installation and first-boot flow has been verified.
 
 See [docs/installation.md](docs/installation.md) for supported layouts,
