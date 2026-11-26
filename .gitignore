@@ -7,3 +7,7 @@ result-*
 
 # Ignore NixOS interactive test driver history
 **/.nixos-test-history
+
+# Ignore virtual disks created for installer tests
+*.qcow2
+*.qcow2.*
