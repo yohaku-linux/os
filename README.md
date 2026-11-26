@@ -2,25 +2,20 @@
 
 **余白から、新しいデスクトップ体験を。**
 
-Yohaku Linux begins as a NixOS-based configuration project. The initial
-work focuses on organizing and testing a general desktop setup based on
-the maintainer's existing NixOS configuration.
+Yohaku Linuxは、NixOSをベースとしたLinuxディストリビューションの開発プロジェクトです。
+まずは、開発者が現在使用しているNixOSの設定を整理し、汎用的なデスクトップ環境として再構成・検証することから始めています。
 
-## Current status
+## 現在の開発状況
 
-This repository is at the initial configuration stage. It is not yet a
-finished distribution or a stable release.
+このリポジトリは初期開発段階です。現時点では、完成したディストリビューションや安定版ではありません。
 
-The current setup reuses Niri, Ly, Xwayland, Japanese locale and input,
-Fcitx5/Mozc, Japanese fonts, and common desktop utilities.
+現在は、Niri、Ly、Xwayland、日本語ロケール、日本語入力（Fcitx5・Mozc）、日本語フォント、基本的なデスクトップ用ツールなどを組み合わせています。
 
-An experimental guided installer is now included in the Live image
-configuration. It is not yet validated by a complete install-to-disk
-and first-boot test.
+Live ISOには実験段階の対話式インストーラーを追加しています。ただし、ディスクへのインストールから初回起動までの一連の動作は、まだ検証できていません。
 
-## Build the development Live image
+## 開発用Live ISOのビルド
 
-On a NixOS or Linux system with Nix flakes enabled:
+Nix Flakesを有効にしたNixOSまたはLinux環境で、次のコマンドを実行します。
 
 ```sh
 nix flake lock
@@ -28,20 +23,15 @@ nix flake check --no-build
 nix build --cores 2 --max-jobs 1 .#iso -L
 ```
 
-The build uses two cores for each derivation to avoid letting the ISO
-SquashFS compression saturate the machine. The development Live image
-uses Zstandard compression level 3 for faster builds; the ISO may be
-larger than one built with the NixOS default compression level.
+ビルド時のCPU負荷を抑えるため、各ビルド処理で使用するコア数を2に制限しています。また、開発用Live ISOではSquashFSの圧縮にZstandardのレベル3を使用しています。NixOSの標準設定よりビルドを速くする代わりに、ISOのファイルサイズは大きくなる場合があります。
 
-The ISO is produced under `result/iso/`.
+生成されたISOは `result/iso/` 以下に配置されます。
 
-The initial configuration targets `x86_64-linux` and follows
-`nixos-unstable`. The generated `flake.lock` pins the exact inputs used
-for a build.
+現在の対象アーキテクチャは `x86_64-linux` です。Nixpkgsは `nixos-unstable` を使用し、生成された `flake.lock` によってビルド時の依存関係を固定します。
 
-## Test in QEMU
+## QEMUでの起動確認
 
-The following command was used for the initial Live ISO smoke test:
+初期のLive ISOの動作確認には、次のコマンドを使用しました。
 
 ```sh
 ISO="$(find -L result/iso -maxdepth 1 -name '*.iso' -print -quit)"
@@ -59,62 +49,57 @@ nix shell nixpkgs#qemu --command \
   -boot d
 ```
 
-The USB tablet provides pointer input in the virtual machine. The
-user-mode network device provides QEMU's NAT-based network connection.
+USBタブレットデバイスによって仮想マシン内のマウス操作に対応し、ユーザーモードネットワークによってQEMUのNAT経由でネットワークに接続します。
 
-## Live ISO smoke test
+## Live ISOの動作確認状況
 
-The initial development Live ISO has been manually tested in QEMU.
+初期の開発用Live ISOについて、QEMU上で次の項目を確認しています。
 
-Confirmed:
+**確認済み**
 
-- The Live environment boots into the Niri session.
-- Keyboard and mouse input work.
-- Fcitx5 with Mozc is available and Japanese input/conversion works.
-- Fuzzel can launch Foot.
-- Notifications appear and Waybar is displayed.
-- Network connectivity works from the guest: ping to `1.1.1.1` succeeds
-  and DNS resolution for `github.com` succeeds.
+- Live環境からNiriのセッションを起動できる
+- キーボードとマウスを操作できる
+- Fcitx5とMozcによる日本語入力・変換ができる
+- FuzzelからFootを起動できる
+- 通知が表示され、Waybarが起動する
+- ゲストOSからネットワークに接続できる（`1.1.1.1` へのping、および `github.com` のDNS名前解決）
 
-Known observation:
+**確認中の事項**
 
-- Waybar displays the network as disconnected in the QEMU environment
-  even though the guest can reach the network and resolve hostnames.
-  This has not yet been verified on physical hardware, so it is not
-  currently treated as a confirmed network configuration defect.
+- QEMU内ではゲストOSからネットワーク通信とDNS名前解決ができているにもかかわらず、Waybarではネットワークが切断状態として表示されます。実機ではまだ確認していないため、現時点ではネットワーク設定の不具合とは断定していません。
 
-Physical hardware compatibility and installation to a target disk have
-not yet been tested. In particular, Wi-Fi, audio, Bluetooth,
-hardware-specific graphics behavior, and the new installer still need
-separate validation.
+実機との互換性や、インストール先ディスクへの導入はまだ検証していません。特にWi-Fi、音声、Bluetooth、ハードウェア固有のグラフィックス動作、インストーラーについては、今後それぞれ確認する必要があります。
 
-## Install to a target disk
+## ディスクへのインストール
 
-The Live image configuration includes an experimental guided installer.
-It discovers internal non-removable disks, selects a single candidate
-automatically, or asks the user to choose when multiple candidates exist.
-The initial layout follows the maintainer's NixOS setup: UEFI, GPT,
-a 1 GiB FAT32 EFI partition, ext4 root, systemd-boot, and no swap.
-The selected disk is erased completely, so test the installer only in
-a virtual machine with a separate virtual disk until the full
-installation and first-boot flow has been verified.
+Live ISOには実験段階の対話式インストーラーを組み込んでいます。
 
-See [docs/installation.md](docs/installation.md) for supported layouts,
-account setup, limitations, and test instructions.
+内蔵の固定ディスクを検出し、対象ディスクが1台の場合は自動選択、複数台の場合は一覧から選択する方式です。初期のパーティション構成は、開発者が使用しているNixOS環境に合わせています。
 
-## Repository layout
+- UEFI
+- GPT
+- EFIパーティション：1 GiB、FAT32
+- ルートパーティション：残りの領域、ext4
+- ブートローダー：systemd-boot
+- Swap：なし
 
-- `flake.nix` — NixOS configuration and development ISO output.
-- `nixos/modules/` — shared NixOS modules.
-- `nixos/iso/` — development Live image and installer configuration.
-- `nixos/profiles/` — optional configuration profiles.
-- `scripts/` — installation scripts.
-- `docs/` — architecture and development notes.
+選択したディスクは全体を初期化します。インストールから初回起動までの動作確認が完了するまでは、必ず専用の仮想ディスクを使ってテストしてください。
 
-## Personal machine settings intentionally excluded
+対応するディスク構成、ユーザーアカウントの設定、制限事項、テスト手順については、[インストール手順](docs/installation.md)を参照してください。
 
-Machine-specific hardware files, disk UUIDs, personal user accounts,
-and personal host names are not copied. Personal applications and
-developer tools are also kept out of the default desktop setup.
+## リポジトリ構成
 
-See [docs/architecture.md](docs/architecture.md) for the current scope.
+- `flake.nix` — NixOSの構成と開発用ISOの定義
+- `nixos/modules/` — 共通のNixOSモジュール
+- `nixos/iso/` — 開発用Live ISOとインストーラーの設定
+- `nixos/profiles/` — 任意で利用する設定プロファイル
+- `scripts/` — インストール用スクリプト
+- `docs/` — アーキテクチャや開発に関するドキュメント
+
+## 個人用の設定について
+
+特定のマシンに依存するハードウェア設定、ディスクUUID、個人用ユーザーアカウント、ホスト名は取り込んでいません。
+
+また、個人用アプリケーションや開発ツールも、標準のデスクトップ環境には含めていません。
+
+現在の開発方針については、[アーキテクチャ](docs/architecture.md)を参照してください。
